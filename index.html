@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blocking Social Networks</title>
+    <style>
+        :root {
+            --etk-color: #2563eb; /* 蓝色 */
+            --gtk-color: #16a34a; /* 绿色 */
+            --red-color: #dc2626; /* 红色 */
+            --bg-color: #f1f5f9;
+        }
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.8;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        /* 标签页 CSS */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e2e8f0;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            color: #64748b;
+            border-bottom: 3px solid transparent;
+        }
+        .tab.active {
+            color: #0f172a;
+            border-bottom-color: #3b82f6;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Tab 1: 文本样式 */
+        h1 { text-align: center; color: #1e293b; }
+        .audio-container { text-align: center; margin-bottom: 20px; }
+        .article-body { font-size: 18px; color: #334155; }
+        
+        /* 互动词语样式 */
+        .word {
+            position: relative;
+            cursor: pointer;
+            font-weight: bold;
+            display: inline-block;
+            margin: 0 2px;
+            border-bottom: 2px dashed;
+        }
+        .word.etk { color: var(--etk-color); border-bottom-color: var(--etk-color); }
+        .word.gtk { color: var(--gtk-color); border-bottom-color: var(--gtk-color); }
+        .word.red-pattern { color: var(--red-color); border-bottom-color: var(--red-color); }
+        
+        .tooltip {
+            visibility: hidden;
+            background-color: #1e293b;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px 12px;
+            position: absolute;
+            z-index: 10;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            font-size: 14px;
+            font-weight: normal;
+            line-height: 1.4;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #1e293b transparent transparent transparent;
+        }
+        .word.show .tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* 网格表格样式 */
+        h2 { margin-top: 40px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+        .grid-table {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .grid-cell {
+            background: #f8fafc;
+            border: 2px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 80px;
+        }
+        .grid-cell:hover { background: #f1f5f9; transform: scale(1.02); }
+        .grid-cell.etk-cell { border-color: var(--etk-color); }
+        .grid-cell.gtk-cell { border-color: var(--gtk-color); }
+        .grid-cell.pattern-cell { border-color: var(--red-color); grid-column: span 2; }
+        @media (max-width: 600px) { .grid-cell.pattern-cell { grid-column: span 1; } }
+
+        .cell-pinyin { font-size: 14px; color: #64748b; margin-bottom: 5px; display: none; }
+        .cell-hanzi { font-size: 22px; font-weight: bold; color: #0f172a; }
+        .cell-en { font-size: 14px; color: #0f172a; margin-top: 5px; display: none; }
+        .grid-cell.show .cell-pinyin, .grid-cell.show .cell-en { display: block; }
+
+        /* Tab 2: Character Decoder */
+        .decoder-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .word-counter {
+            font-size: 18px;
+            font-weight: bold;
+            background: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .btn-group button {
+            padding: 8px 16px;
+            margin-left: 10px;
+            border: none;
+            border-radius: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-size: 16px;
+        }
+        .btn-hint { background: #e0f2fe; color: #0369a1; }
+        .btn-answer { background: #fef3c7; color: #b45309; }
+        
+        .hint-text, .answer-text {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            height: 30px;
+        }
+        
+        .char-container-wrapper {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+        
+        .char-box {
+            position: relative;
+            width: 140px;
+            height: 140px;
+            background: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 100px;
+            font-family: "KaiTi", "STKaiti", serif;
+            color: #1e293b;
+            overflow: hidden;
+        }
+        
+        .char-grid {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+        }
+        
+        .grid-block {
+            background-color: #3b82f6;
+            border: 1px solid #60a5fa;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            transition: opacity 0.3s;
+        }
+        
+        .grid-block.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .nav-buttons { text-align: center; }
+        .nav-buttons button {
+            background: #94a3b8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 0 10px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .nav-buttons button.next { background: #22c55e; }
+        .nav-buttons button:hover { opacity: 0.9; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('tab1')">Tab 1: 文本</div>
+        <div class="tab" onclick="switchTab('tab2')">Tab 2: Character Decoder</div>
+    </div>
+
+    <!-- TAB 1 CONTENT -->
+    <div id="tab1" class="tab-content active">
+        <h1>封锁社交网</h1>
+        <div class="audio-container">
+            <audio controls src="Block_Social_Networks_B.mp3"></audio>
+        </div>
+
+        <div class="article-body">
+            <p>各位老师、同学们：</p>
+            <p>
+                大家好！我是十一年级的学生<span class="word etk" onclick="toggleWord(this)">代表<span class="tooltip">dài biǎo<br>representative [ETK]</span></span>王建。关于校园内是否应该封锁社交网，很多同学都<span class="word etk" onclick="toggleWord(this)">分享<span class="tooltip">fēn xiǎng<br>share [ETK]</span></span>了自己的<span class="word etk" onclick="toggleWord(this)">观点<span class="tooltip">guān diǎn<br>viewpoint [ETK]</span></span>。今天，我想代表<span class="word gtk" onclick="toggleWord(this)">反对<span class="tooltip">fǎn duì<br>oppose [GTK]</span></span>的一方，<span class="word etk" onclick="toggleWord(this)">谈谈<span class="tooltip">tán tán<br>talk about [ETK]</span></span>我的个人<span class="word etk" onclick="toggleWord(this)">看法<span class="tooltip">kàn fǎ<br>opinion [ETK]</span></span>：我认为，学校不应该封锁社交网。
+            </p>
+            <p>
+                首先，网络的<span class="word etk" onclick="toggleWord(this)">普及<span class="tooltip">pǔ jí<br>popularization [ETK]</span></span>给我们的学习和生活带来了特别大的方便，<span class="word red-pattern" onclick="toggleWord(this)">尤其是<span class="tooltip">yóu qí shì<br>especially</span></span>社交网，可以说是帮了我们大忙。<span class="word red-pattern" onclick="toggleWord(this)">通过<span class="tooltip">tōng guò<br>through / by means of</span></span>社交软件，我们<span class="word etk" onclick="toggleWord(this)">不必<span class="tooltip">bù bì<br>need not [ETK]</span></span>每次都<span class="word etk" onclick="toggleWord(this)">碰面<span class="tooltip">pèng miàn<br>meet [ETK]</span></span>，在网上就能随时跟同学讨论、完成作业。可以说，社交网是我们生活中<span class="word red-pattern" onclick="toggleWord(this)">不可缺少的好帮手<span class="tooltip">bù kě quē shǎo de hǎo bāng shǒu<br>indispensable good helper</span></span>。
+            </p>
+            <p>
+                当然，我也<span class="word etk" onclick="toggleWord(this)">理解<span class="tooltip">lǐ jiě<br>understand [ETK]</span></span>为什么有些同学支持封锁。社交网络上<span class="word etk" onclick="toggleWord(this)">确实<span class="tooltip">què shí<br>indeed [ETK]</span></span>有很多<span class="word etk" onclick="toggleWord(this)">片面的<span class="tooltip">piàn miàn de<br>one-sided [ETK]</span></span>信息。比如，我们经常能在网上看到各种各样的美食、漂亮的风景和<span class="word etk" onclick="toggleWord(this)">让人羡慕的<span class="tooltip">ràng rén xiàn mù de<br>enviable [ETK]</span></span>生活，容易让学生<span class="word etk" onclick="toggleWord(this)">误解<span class="tooltip">wù jiě<br>misunderstand [ETK]</span></span>，觉得现实生活很<span class="word etk" onclick="toggleWord(this)">轻松<span class="tooltip">qīng sōng<br>relaxed [ETK]</span></span>，外面的世界<span class="word red-pattern" onclick="toggleWord(this)">就像<span class="tooltip">jiù xiàng<br>just like</span></span>主题公园<span class="word red-pattern" onclick="toggleWord(this)">一样<span class="tooltip">yí yàng<br>the same</span></span>有趣。
+            </p>
+            <p>
+                但是，把社交网封锁起来就能<span class="word etk" onclick="toggleWord(this)">解决<span class="tooltip">jiě jué<br>solve [ETK]</span></span>问题吗？<span class="word red-pattern" onclick="toggleWord(this)">等<span class="tooltip">děng<br>wait until</span></span>我们<span class="word etk" onclick="toggleWord(this)">将来<span class="tooltip">jiāng lái<br>future [ETK]</span></span>离开学校，<span class="word red-pattern" onclick="toggleWord(this)">一定会<span class="tooltip">yí dìng huì<br>definitely will</span></span>发现<span class="word etk" onclick="toggleWord(this)">真实的<span class="tooltip">zhēn shí de<br>real [ETK]</span></span>生活没有那么轻松，<span class="word red-pattern" onclick="toggleWord(this)">只有<span class="tooltip">zhǐ yǒu<br>only if</span></span>努力工作<span class="word red-pattern" onclick="toggleWord(this)">才<span class="tooltip">cái<br>then</span></span>会有收获。如果学校现在不让我们<span class="word etk" onclick="toggleWord(this)">接触<span class="tooltip">jiē chù<br>contact [ETK]</span></span>这些，我们以后可能会很难适应<span class="word etk" onclick="toggleWord(this)">未来<span class="tooltip">wèi lái<br>future [ETK]</span></span>的生活。我认为，学校更应该教我们学习如何<span class="word etk" onclick="toggleWord(this)">正确<span class="tooltip">zhèng què<br>correct [ETK]</span></span>使用社交网，这样我们以后才能融入新世界，跟上时代的脚步。<span class="word red-pattern" onclick="toggleWord(this)">因此<span class="tooltip">yīn cǐ<br>therefore</span></span>，我反对在校园内封锁社交网。
+            </p>
+            <p>谢谢大家！</p>
+        </div>
+
+        <!-- ETK 词语表 -->
+        <h2>📘 蓝色词语 (ETK)</h2>
+        <div class="grid-table" id="etk-table"></div>
+
+        <!-- GTK 词语表 -->
+        <h2>📗 绿色词语 (GTK)</h2>
+        <div class="grid-table" id="gtk-table"></div>
+
+        <!-- 重点句型表 -->
+        <h2>📕 重点句型</h2>
+        <div class="grid-table" id="pattern-table"></div>
+    </div>
+
+    <!-- TAB 2 CONTENT -->
+    <div id="tab2" class="tab-content" style="background:#f8fafc; padding:20px; border-radius:10px;">
+        <h1 style="margin-top:0;">🎯 Character Decoder</h1>
+        <div class="decoder-header">
+            <div class="word-counter">Word <span id="current-word-idx">1</span> / <span id="total-words">20</span></div>
+            <div class="btn-group">
+                <button class="btn-hint" onclick="showHint()">👁️ Hint</button>
+                <button class="btn-answer" onclick="showAnswer()">💡 Answer</button>
+            </div>
+        </div>
+        
+        <div class="hint-text" id="hint-display"></div>
+        <div class="char-container-wrapper" id="decoder-board">
+            <!-- 动态网格将在 JS 中生成 -->
+        </div>
+        <div class="answer-text" id="answer-display" style="color:var(--etk-color);"></div>
+
+        <div class="nav-buttons">
+            <button onclick="prevWord()">⬅️ Prev</button>
+            <button class="next" onclick="nextWord()">Next ➡️</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Tab 切换逻辑
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelector(`.tab[onclick="switchTab('${tabId}')"]`).classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+    }
+
+    // 显示/隐藏文中的词汇翻译
+    function toggleWord(element) {
+        const isActive = element.classList.contains('show');
+        document.querySelectorAll('.word.show').forEach(el => el.classList.remove('show'));
+        if (!isActive) element.classList.add('show');
+    }
+    
+    // 点击空白处关闭 Tooltip
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.word')) {
+            document.querySelectorAll('.word.show').forEach(el => el.classList.remove('show'));
+        }
+    });
+
+    // 词汇与句型数据
+    const etkData = [
+        {hz: '代表', py: 'dài biǎo', en: 'representative'}, {hz: '分享', py: 'fēn xiǎng', en: 'share'},
+        {hz: '观点', py: 'guān diǎn', en: 'viewpoint'}, {hz: '谈谈', py: 'tán tán', en: 'talk about'},
+        {hz: '看法', py: 'kàn fǎ', en: 'opinion'}, {hz: '普及', py: 'pǔ jí', en: 'popularization'},
+        {hz: '不必', py: 'bù bì', en: 'need not'}, {hz: '碰面', py: 'pèng miàn', en: 'meet'},
+        {hz: '理解', py: 'lǐ jiě', en: 'understand'}, {hz: '确实', py: 'què shí', en: 'indeed'},
+        {hz: '片面的', py: 'piàn miàn de', en: 'one-sided'}, {hz: '让人羡慕的', py: 'ràng rén xiàn mù de', en: 'enviable'},
+        {hz: '误解', py: 'wù jiě', en: 'misunderstand'}, {hz: '轻松', py: 'qīng sōng', en: 'relaxed'},
+        {hz: '解决', py: 'jiě jué', en: 'solve'}, {hz: '将来', py: 'jiāng lái', en: 'future'},
+        {hz: '真实的', py: 'zhēn shí de', en: 'real'}, {hz: '接触', py: 'jiē chù', en: 'contact'},
+        {hz: '未来', py: 'wèi lái', en: 'future'}, {hz: '正确', py: 'zhèng què', en: 'correct'}
+    ];
+
+    const gtkData = [
+        {hz: '反对', py: 'fǎn duì', en: 'oppose'}
+    ];
+
+    const patternData = [
+        {hz: '......，尤其是......', py: '..., yóu qí shì ...', en: '..., especially ...'},
+        {hz: '通过......，......', py: 'tōng guò ..., ...', en: 'Through ..., ...'},
+        {hz: '就像.......一样......', py: 'jiù xiàng ... yí yàng ...', en: 'just like ...'},
+        {hz: '等......，一定会......', py: 'děng ..., yí dìng huì ...', en: 'Wait until ..., definitely will ...'},
+        {hz: '只有......，才......', py: 'zhǐ yǒu ..., cái ...', en: 'Only if ..., then ...'},
+        {hz: '因此，......', py: 'yīn cǐ, ...', en: 'Therefore, ...'}
+    ];
+
+    // 渲染表格
+    function renderGrid(containerId, data, extraClass) {
+        const container = document.getElementById(containerId);
+        data.forEach(item => {
+            const cell = document.createElement('div');
+            cell.className = `grid-cell ${extraClass}`;
+            cell.onclick = () => cell.classList.toggle('show');
+            cell.innerHTML = `
+                <div class="cell-pinyin">${item.py}</div>
+                <div class="cell-hanzi">${item.hz}</div>
+                <div class="cell-en">${item.en}</div>
+            `;
+            container.appendChild(cell);
+        });
+    }
+
+    renderGrid('etk-table', etkData, 'etk-cell');
+    renderGrid('gtk-table', gtkData, 'gtk-cell');
+    renderGrid('pattern-table', patternData, 'pattern-cell');
+
+    // TAB 2: Character Decoder 逻辑
+    let currentDecoderIndex = 0;
+    document.getElementById('total-words').textContent = etkData.length;
+
+    function renderDecoder() {
+        const wordData = etkData[currentDecoderIndex];
+        document.getElementById('current-word-idx').textContent = currentDecoderIndex + 1;
+        document.getElementById('hint-display').textContent = "";
+        document.getElementById('answer-display').textContent = "";
+        
+        const board = document.getElementById('decoder-board');
+        board.innerHTML = '';
+
+        const chars = wordData.hz.split('');
+        chars.forEach((char) => {
+            const box = document.createElement('div');
+            box.className = 'char-box';
+            box.textContent = char;
+            
+            const grid = document.createElement('div');
+            grid.className = 'char-grid';
+            
+            for (let i = 1; i <= 16; i++) {
+                const block = document.createElement('div');
+                block.className = 'grid-block';
+                block.textContent = i;
+                block.onclick = function() {
+                    this.classList.add('hidden');
+                };
+                grid.appendChild(block);
+            }
+            box.appendChild(grid);
+            board.appendChild(box);
+        });
+    }
+
+    function showHint() {
+        document.getElementById('hint-display').textContent = etkData[currentDecoderIndex].en;
+    }
+
+    function showAnswer() {
+        document.getElementById('answer-display').textContent = etkData[currentDecoderIndex].py + " : " + etkData[currentDecoderIndex].hz;
+        document.querySelectorAll('.grid-block').forEach(b => b.classList.add('hidden'));
+    }
+
+    function prevWord() {
+        if (currentDecoderIndex > 0) {
+            currentDecoderIndex--;
+            renderDecoder();
+        }
+    }
+
+    function nextWord() {
+        if (currentDecoderIndex < etkData.length - 1) {
+            currentDecoderIndex++;
+            renderDecoder();
+        }
+    }
+
+    // 初始化 Decoder
+    renderDecoder();
+
+</script>
+</body>
+</html>
